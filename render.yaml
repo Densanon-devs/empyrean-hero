@@ -1,26 +1,12 @@
 services:
   - type: web
-    name: empyrean-hero-api
+        name: empyrean-hero
     runtime: node
     plan: free
-    buildCommand: pnpm install && pnpm --filter @empyrean-hero/engine build && pnpm --filter @empyrean-hero/server build
+        buildCommand: pnpm install && pnpm run build
     startCommand: node packages/server/dist/index.js
     envVars:
       - key: NODE_ENV
         value: production
       - key: JWT_SECRET
         generateValue: true
-      - key: CLIENT_ORIGIN
-        value: https://empyrean-hero-client.onrender.com
-
-staticSites:
-  - name: empyrean-hero-client
-    buildCommand: pnpm install && pnpm --filter @empyrean-hero/engine build && pnpm --filter @empyrean-hero/client build
-    staticPublishPath: packages/client/dist
-    envVars:
-      - key: VITE_SERVER_URL
-        value: https://empyrean-hero-api.onrender.com
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
