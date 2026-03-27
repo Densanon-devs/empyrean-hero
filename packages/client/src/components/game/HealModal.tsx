@@ -56,7 +56,7 @@ export default function HealModal({ onClose }: HealModalProps) {
   function handleConfirm() {
     getSocket().emit(
       'game:action',
-      { type: 'HEAL', playerId, targetHeroInstanceIds: selectedHeroIds, cardIds: selectedCardIds },
+      { type: 'HEAL', playerId: playerId!, targetHeroInstanceIds: selectedHeroIds, cardIds: selectedCardIds },
       () => {},
     );
     onClose();

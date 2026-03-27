@@ -104,7 +104,7 @@ interface ActionBtnProps {
   onClick: () => void;
 }
 
-function ActionBtn({ colorClass, emoji, letter, label, sublabel, onClick }: ActionBtnProps) {
+function ActionBtn({ colorClass, emoji, letter, label, sublabel: _sublabel, onClick }: ActionBtnProps) {
   return (
     <button className={`hero-action-btn ${colorClass}`} onClick={onClick}>
       <span className="text-xl">{emoji}</span>

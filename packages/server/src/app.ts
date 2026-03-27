@@ -6,7 +6,7 @@ import { config } from './config.js';
 // Express app setup
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function createApp() {
+export function createApp(): express.Application {
   const app = express();
 
   app.use(cors({ origin: config.clientOrigin, credentials: true }));

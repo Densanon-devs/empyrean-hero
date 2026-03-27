@@ -33,7 +33,7 @@ export default function RecruitModal({ onClose }: RecruitModalProps) {
   function handleConfirm() {
     getSocket().emit(
       'game:action',
-      { type: 'RECRUIT', playerId, heroInstanceIds: selectedIds },
+      { type: 'RECRUIT', playerId: playerId!, heroInstanceIds: selectedIds },
       () => {},
     );
     onClose();

@@ -76,26 +76,26 @@ export default function EnhanceModal({ onClose }: EnhanceModalProps) {
 
     // Ability cards go directly in ENHANCE; stat cards go via PLAY_CARD after
     const abilityCardIds = selectedCardIds.filter((id) => {
-      const card = me.hand.find((c) => c.id === id);
+      const card = me!.hand.find((c) => c.id === id);
       return card?.type === 'ability';
     });
     const statCardIds = selectedCardIds.filter((id) => {
-      const card = me.hand.find((c) => c.id === id);
+      const card = me!.hand.find((c) => c.id === id);
       return card?.type === 'stat';
     });
 
     getSocket().emit(
       'game:action',
-      { type: 'ENHANCE', playerId, drawCount, cardIds: abilityCardIds },
+      { type: 'ENHANCE', playerId: playerId!, drawCount, cardIds: abilityCardIds },
       (res) => {
         if (res.success && statCardIds.length > 0) {
           for (const cardId of statCardIds) {
             const targetId = targets[cardId];
             if (targetId) {
-              getSocket().emit('game:action', { type: 'PLAY_CARD', playerId, cardId, targetId }, () => {});
+              getSocket().emit('game:action', { type: 'PLAY_CARD', playerId: playerId!, cardId, targetId }, () => {});
             } else {
               // No target chosen — play without target (engine handles or ignores)
-              getSocket().emit('game:action', { type: 'PLAY_CARD', playerId, cardId }, () => {});
+              getSocket().emit('game:action', { type: 'PLAY_CARD', playerId: playerId!, cardId }, () => {});
             }
           }
         }
