@@ -10,6 +10,8 @@ export const config = {
   /** Minutes before an idle room is cleaned up */
   roomIdleTimeoutMinutes: Number(process.env['ROOM_IDLE_TIMEOUT_MINUTES'] ?? 30),
   nodeEnv: process.env['NODE_ENV'] ?? 'development',
+  /** JWT signing secret — override in production via JWT_SECRET env var */
+  jwtSecret: process.env['JWT_SECRET'] ?? 'dev-secret-change-in-production',
 } as const;
 
 export type Config = typeof config;

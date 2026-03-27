@@ -17,6 +17,15 @@ interface BaseAction {
 
 // ─── HERO actions ─────────────────────────────────────────────────────────────
 
+/** A card to play during a HEAL or ENHANCE action, with an optional hero/player target */
+export interface CardPlay {
+  cardId: string;
+  /** Hero instance ID for passive ability cards that attach to a hero; player ID for active cards targeting a player */
+  targetId?: string;
+  /** Secondary target for abilities that need two choices */
+  secondaryTargetId?: string;
+}
+
 /**
  * H — Heal
  * Pick any of your fatigued heroes to un-fatigue; optionally play up to 3 enhancement cards.
@@ -25,8 +34,10 @@ export interface HealAction extends BaseAction {
   type: 'HEAL';
   /** Instance IDs of fatigued heroes to heal (un-fatigue) */
   targetHeroInstanceIds: string[];
-  /** Card IDs from hand to play during this action (max 3) */
-  cardIds: string[];
+  /** Cards to play during this action (max 3), each with an optional target */
+  cardPlays?: CardPlay[];
+  /** @deprecated Use cardPlays instead */
+  cardIds?: string[];
 }
 
 /**
@@ -37,8 +48,10 @@ export interface EnhanceAction extends BaseAction {
   type: 'ENHANCE';
   /** How many cards to draw (1–3) */
   drawCount: number;
-  /** Card IDs from hand to play (max 3) */
-  cardIds: string[];
+  /** Cards to play during this action (max 3), each with an optional target */
+  cardPlays?: CardPlay[];
+  /** @deprecated Use cardPlays instead */
+  cardIds?: string[];
 }
 
 /**

@@ -5,7 +5,8 @@ import CardComponent from '../cards/CardComponent';
 import { useGameContext } from '../../context/GameContext';
 import { useMyPlayer } from '../../hooks/useGameState';
 import { getSocket } from '../../socket/client';
-import type { ArenaHero, StatCard } from '@empyrean-hero/engine';
+import type { ArenaHero, StatCard, AbilityCard } from '@empyrean-hero/engine';
+import type { CardPlay } from '@empyrean-hero/engine';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EnhanceModal — draw cards then play up to 3 from hand
@@ -34,13 +35,18 @@ export default function EnhanceModal({ onClose }: EnhanceModalProps) {
 
   const myArenaHeroes = me.arena;
 
-  // Cards that are stat cards among the selection
-  const selectedStatCards = selectedCardIds
+  // Cards that need a hero target: stat cards AND passive ability cards
+  const selectedTargetCards = selectedCardIds
     .map((id) => me.hand.find((c) => c.id === id))
-    .filter((c): c is StatCard => c?.type === 'stat');
+    .filter((c): c is StatCard | AbilityCard => {
+      if (!c) return false;
+      if (c.type === 'stat') return true;
+      if (c.type === 'ability' && (c as AbilityCard).abilityType === 'P') return true;
+      return false;
+    });
 
-  // Stat cards that still need a target
-  const untargetedStatCards = selectedStatCards.filter((c) => !statTargets[c.id]);
+  // All target-needing cards that still need a target
+  const untargetedStatCards = selectedTargetCards.filter((c) => !statTargets[c.id]);
 
   function toggleCard(id: string) {
     setSelectedCardIds((prev) => {
@@ -71,35 +77,16 @@ export default function EnhanceModal({ onClose }: EnhanceModalProps) {
   }
 
   function submitAction() {
-    // Capture current statTargets in closure; safe for use inside socket callback
-    const targets = statTargets;
-
-    // Ability cards go directly in ENHANCE; stat cards go via PLAY_CARD after
-    const abilityCardIds = selectedCardIds.filter((id) => {
-      const card = me!.hand.find((c) => c.id === id);
-      return card?.type === 'ability';
-    });
-    const statCardIds = selectedCardIds.filter((id) => {
-      const card = me!.hand.find((c) => c.id === id);
-      return card?.type === 'stat';
-    });
+    // Build cardPlays array with per-card targets
+    const cardPlays: CardPlay[] = selectedCardIds.map((id) => ({
+      cardId: id,
+      targetId: statTargets[id],
+    }));
 
     getSocket().emit(
       'game:action',
-      { type: 'ENHANCE', playerId: playerId!, drawCount, cardIds: abilityCardIds },
-      (res) => {
-        if (res.success && statCardIds.length > 0) {
-          for (const cardId of statCardIds) {
-            const targetId = targets[cardId];
-            if (targetId) {
-              getSocket().emit('game:action', { type: 'PLAY_CARD', playerId: playerId!, cardId, targetId }, () => {});
-            } else {
-              // No target chosen — play without target (engine handles or ignores)
-              getSocket().emit('game:action', { type: 'PLAY_CARD', playerId: playerId!, cardId }, () => {});
-            }
-          }
-        }
-      },
+      { type: 'ENHANCE', playerId: playerId!, drawCount, cardPlays },
+      () => {},
     );
     onClose();
   }
@@ -157,7 +144,7 @@ export default function EnhanceModal({ onClose }: EnhanceModalProps) {
         <StepDot n={1} label="Draw" active={step === 'draw'} done={step !== 'draw'} />
         <div className="flex-1 h-px bg-white/10" />
         <StepDot n={2} label="Play" active={step === 'cards'} done={step === 'attach'} />
-        {selectedStatCards.length > 0 && (
+        {selectedTargetCards.length > 0 && (
           <>
             <div className="flex-1 h-px bg-white/10" />
             <StepDot n={3} label="Attach" active={step === 'attach'} done={false} />
@@ -255,11 +242,11 @@ export default function EnhanceModal({ onClose }: EnhanceModalProps) {
         </div>
       )}
 
-      {/* ── Step 3: attach stat card to a hero ──────────────────────────── */}
+      {/* ── Step 3: attach stat/passive card to a hero ──────────────────── */}
       {step === 'attach' && (
         <div className="space-y-5">
-          {/* Progress through unattached stat cards */}
-          {selectedStatCards.map((sc) => {
+          {/* Progress through unattached target-needing cards */}
+          {selectedTargetCards.map((sc) => {
             const attached = statTargets[sc.id];
             return (
               <div
@@ -278,9 +265,15 @@ export default function EnhanceModal({ onClose }: EnhanceModalProps) {
                   className="flex items-center gap-3 cursor-pointer"
                   onClick={() => setAttachingCardId(sc.id)}
                 >
-                  <div className={`rounded-lg px-3 py-1.5 text-sm font-bold ${sc.statType === 'ATT' ? 'bg-red-500/20 text-red-300 border border-red-400/30' : 'bg-blue-500/20 text-blue-300 border border-blue-400/30'}`}>
-                    +{sc.value} {sc.statType}
-                  </div>
+                  {sc.type === 'stat' ? (
+                    <div className={`rounded-lg px-3 py-1.5 text-sm font-bold ${(sc as StatCard).statType === 'ATT' ? 'bg-red-500/20 text-red-300 border border-red-400/30' : 'bg-blue-500/20 text-blue-300 border border-blue-400/30'}`}>
+                      +{(sc as StatCard).value} {(sc as StatCard).statType}
+                    </div>
+                  ) : (
+                    <div className="rounded-lg px-3 py-1.5 text-sm font-bold bg-purple-500/20 text-purple-300 border border-purple-400/30">
+                      ABILITY
+                    </div>
+                  )}
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-white">{sc.name}</p>
                     <p className="text-xs text-white/40">

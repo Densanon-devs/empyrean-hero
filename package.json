@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --parallel run dev",
-    "build": "pnpm -r run build",
+    "build": "pnpm --filter @empyrean-hero/engine build && pnpm --filter @empyrean-hero/client build && pnpm --filter @empyrean-hero/server build",
     "test": "pnpm -r run test",
     "typecheck": "pnpm -r run typecheck"
   },

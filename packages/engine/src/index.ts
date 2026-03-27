@@ -27,6 +27,7 @@ export type { HeroZone, ArenaHero, PlayerState } from './types/player';
 
 export type {
   ActionType,
+  CardPlay,
   HealAction,
   EnhanceAction,
   RecruitAction,
@@ -56,6 +57,14 @@ export type {
 export type {
   LobbyPlayer,
   RoomConfig,
+  QueueType,
+  MatchmakingStatus,
+  MatchFound,
+  FriendInfo,
+  FriendRequest,
+  OutgoingRequest,
+  FriendsList,
+  GameInvite,
   ClientToServerEvents,
   ServerToClientEvents,
   InterServerEvents,
@@ -88,3 +97,13 @@ export {
 export type { AbilityContext } from './engine/abilities';
 export { shuffleDeck, drawCards, discardCard } from './engine/deck';
 export type { DeckCard } from './engine/deck';
+
+// ── Rating ─────────────────────────────────────────────────────────────────────
+export {
+  STARTING_RATING,
+  RANK_TIERS,
+  getRankTier,
+  getRankTierInfo,
+  calculateElo,
+} from './rating';
+export type { RankTier, RankTierInfo, PlayerRatingInfo, RatingChange } from './rating';

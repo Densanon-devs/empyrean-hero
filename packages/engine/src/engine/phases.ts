@@ -1,6 +1,6 @@
 import type { GameState, ActionResult, GameEvent } from '../types/game';
 import type {
-  HealAction, EnhanceAction, RecruitAction, OvercomeAction, PassTurnAction,
+  HealAction, EnhanceAction, RecruitAction, OvercomeAction, PassTurnAction, CardPlay,
 } from '../types/actions';
 import type { ArenaHero } from '../types/player';
 import { drawCards } from './deck';
@@ -9,6 +9,7 @@ import { checkWinConditions, updateNoHeroesCounts } from './winConditions';
 import {
   processAbilities,
   checkAndResolveDrought,
+  applyAbilityCardEffect,
   updatePlayer,
   type AbilityContext,
 } from './abilities';
@@ -29,7 +30,10 @@ export function applyHeal(state: GameState, action: HealAction): ActionResult {
   const player = state.players[action.playerId];
   if (!player) return fail(state, 'Player not found');
 
-  if (action.targetHeroInstanceIds.length === 0 && action.cardIds.length === 0) {
+  // Normalise card plays from either new cardPlays or legacy cardIds
+  const cardPlays: CardPlay[] = action.cardPlays ?? (action.cardIds ?? []).map((id) => ({ cardId: id }));
+
+  if (action.targetHeroInstanceIds.length === 0 && cardPlays.length === 0) {
     return fail(state, 'Heal action must target at least one hero or play a card');
   }
 
@@ -51,7 +55,7 @@ export function applyHeal(state: GameState, action: HealAction): ActionResult {
     };
   });
 
-  if (action.cardIds.length > 3) {
+  if (cardPlays.length > 3) {
     return fail(state, 'Cannot play more than 3 cards during Heal');
   }
 
@@ -69,8 +73,27 @@ export function applyHeal(state: GameState, action: HealAction): ActionResult {
     ],
   };
 
-  // Eng ability: after completing action, heal one hero
-  // (Eng's ability is triggered separately via the hero ability activation system)
+  // Play each card requested as part of the Heal action
+  for (const cp of cardPlays) {
+    const cardResult = applyAbilityCardEffect(
+      newState, action.playerId, cp.cardId, cp.targetId, cp.secondaryTargetId,
+    );
+    newState = cardResult.newState;
+    events.push(...cardResult.events);
+    // If not handled (e.g. passive card without target), move to discard
+    if (!cardResult.cardHandled) {
+      const currentPlayer = newState.players[action.playerId];
+      if (currentPlayer) {
+        const card = currentPlayer.hand.find((c) => c.id === cp.cardId);
+        if (card) {
+          newState = updatePlayer(newState, action.playerId, {
+            hand: currentPlayer.hand.filter((c) => c.id !== cp.cardId),
+            discardPile: [...currentPlayer.discardPile, card],
+          });
+        }
+      }
+    }
+  }
 
   return advance(newState, events);
 }
@@ -86,15 +109,18 @@ export function applyEnhance(state: GameState, action: EnhanceAction): ActionRes
   const player = state.players[action.playerId];
   if (!player) return fail(state, 'Player not found');
 
+  // Normalise card plays from either new cardPlays or legacy cardIds
+  const cardPlays: CardPlay[] = action.cardPlays ?? (action.cardIds ?? []).map((id) => ({ cardId: id }));
+
   // Hindra: cannot play ability cards this turn
-  if (player.cannotPlayAbilityCards && action.cardIds.length > 0) {
+  if (player.cannotPlayAbilityCards && cardPlays.length > 0) {
     return fail(state, 'Hindra: Lockdown — cannot play Ability Cards to field this turn');
   }
 
   const drawCount = Math.min(action.drawCount, 3);
   const { drawn, deck, discard } = drawCards(player.enhancementDeck, player.discardPile, drawCount);
 
-  if (action.cardIds.length > 3) {
+  if (cardPlays.length > 3) {
     return fail(state, 'Cannot play more than 3 cards during Enhance');
   }
 
@@ -102,7 +128,7 @@ export function applyEnhance(state: GameState, action: EnhanceAction): ActionRes
     { type: 'CARD_PLAYED', payload: { count: drawn.length, playerId: action.playerId } },
   ];
 
-  const newState: GameState = {
+  let newState: GameState = {
     ...state,
     activeTurnAction: 'enhance',
     noActionTurnCount: 0,
@@ -120,6 +146,29 @@ export function applyEnhance(state: GameState, action: EnhanceAction): ActionRes
       `[R${state.round}] ${player.name}: Enhance — drew ${drawn.length} card(s)`,
     ],
   };
+
+  // Play each card requested as part of the Enhance action
+  // (cards played from hand BEFORE drawing are still in the pre-draw hand;
+  //  newly drawn cards are now in hand but were not selected — so this is safe)
+  for (const cp of cardPlays) {
+    const cardResult = applyAbilityCardEffect(
+      newState, action.playerId, cp.cardId, cp.targetId, cp.secondaryTargetId,
+    );
+    newState = cardResult.newState;
+    events.push(...cardResult.events);
+    if (!cardResult.cardHandled) {
+      const currentPlayer = newState.players[action.playerId];
+      if (currentPlayer) {
+        const card = currentPlayer.hand.find((c) => c.id === cp.cardId);
+        if (card) {
+          newState = updatePlayer(newState, action.playerId, {
+            hand: currentPlayer.hand.filter((c) => c.id !== cp.cardId),
+            discardPile: [...currentPlayer.discardPile, card],
+          });
+        }
+      }
+    }
+  }
 
   return advance(newState, events);
 }
@@ -211,6 +260,19 @@ export function applyOvercome(state: GameState, action: OvercomeAction): ActionR
     return fail(state, 'Must declare at least one attacker');
   }
 
+  // Rule: SkyBases cannot be attacked if the defending player has heroes in the arena
+  const defenderPlayer = state.players[action.targetPlayerId];
+  if (
+    defenderPlayer &&
+    defenderPlayer.arena.length > 0 &&
+    action.defenderInstanceIds.length === 0
+  ) {
+    return fail(
+      state,
+      `${defenderPlayer.name} has heroes in the arena — you must target their heroes, not their Sky Base`,
+    );
+  }
+
   // Check if Ignacia's Relentless has been activated for fatigued attack
   const allowFatiguedAttack = action.attackerInstanceIds.some((id) => {
     const h = player.arena.find((a) => a.instanceId === id);
@@ -219,7 +281,6 @@ export function applyOvercome(state: GameState, action: OvercomeAction): ActionR
 
   // Before resolving combat, check Protect passive for each declared defender:
   // If a hero OTHER than the declared defenders is being attacked, activate Protect.
-  const defenderPlayer = state.players[action.targetPlayerId];
   let preState: GameState = { ...state, activeTurnAction: 'overcome' as const };
 
   if (defenderPlayer) {

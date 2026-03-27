@@ -95,6 +95,11 @@ export default function CombatResolver({ onCancel }: CombatResolverProps) {
 
   function handleConfirm() {
     if (!playerId || attackerIds.length === 0) return;
+    // Client-side SkyBase validation
+    if (target.arena.length > 0 && defenderIds.length === 0) {
+      setError(`${target.name} has heroes in arena — select hero targets, not their Sky Base`);
+      return;
+    }
     setError(null);
     combatCountRef.current = gameState?.combatHistory.length ?? 0;
     setStep('pending');

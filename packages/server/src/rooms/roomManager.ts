@@ -14,6 +14,8 @@ export interface RoomPlayer {
   ready: boolean;
   /** Set during Team Play lobby; 'A' or 'B' */
   teamId?: string;
+  /** Set for authenticated players */
+  accountId?: string;
 }
 
 export interface Room {
@@ -25,6 +27,8 @@ export interface Room {
   lastActivityAt: Date;
   /** Game mode chosen by the host; defaults to free-for-all */
   gameMode: GameMode;
+  /** Whether this room was created by matchmaking (affects draft mode) */
+  isMatchmade: boolean;
 }
 
 export class RoomManager {
@@ -34,18 +38,25 @@ export class RoomManager {
 
   // ─── Create ───────────────────────────────────────────────────────────────
 
-  createRoom(socketId: string, playerName: string): { roomCode: string; playerId: string } {
+  createRoom(
+    socketId: string,
+    playerName: string,
+    accountId?: string,
+  ): { roomCode: string; playerId: string } {
     const roomCode = this.generateCode();
     const playerId = uuidv4();
 
     const room: Room = {
       code: roomCode,
       hostId: playerId,
-      players: new Map([[playerId, { id: playerId, name: playerName, socketId, ready: false }]]),
+      players: new Map([
+        [playerId, { id: playerId, name: playerName, socketId, ready: false, accountId }],
+      ]),
       session: null,
       createdAt: new Date(),
       lastActivityAt: new Date(),
       gameMode: 'free-for-all',
+      isMatchmade: false,
     };
 
     this.rooms.set(roomCode, room);
@@ -54,12 +65,62 @@ export class RoomManager {
     return { roomCode, playerId };
   }
 
+  /**
+   * Create a room pre-populated with all matched players.
+   * All players are set as ready so the game can start immediately.
+   * Returns a map of socketId → playerId.
+   */
+  createMatchedRoom(
+    players: Array<{ socketId: string; playerName: string; accountId?: string; teamId?: string }>,
+    gameMode: GameMode,
+  ): { roomCode: string; playerIds: Record<string, string> } {
+    const roomCode = this.generateCode();
+    const playerIds: Record<string, string> = {};
+    const playerMap = new Map<string, RoomPlayer>();
+
+    players.forEach((p, i) => {
+      const playerId = uuidv4();
+      playerIds[p.socketId] = playerId;
+      playerMap.set(playerId, {
+        id: playerId,
+        name: p.playerName,
+        socketId: p.socketId,
+        ready: true,
+        teamId: p.teamId,
+        accountId: p.accountId,
+      });
+      this.socketToRoom.set(p.socketId, roomCode);
+      if (i === 0) {
+        // First player becomes the host
+        Object.assign(playerMap.get(playerId)!, { id: playerId });
+      }
+    });
+
+    const hostPlayerId = playerIds[players[0]!.socketId]!;
+
+    const room: Room = {
+      code: roomCode,
+      hostId: hostPlayerId,
+      players: playerMap,
+      session: null,
+      createdAt: new Date(),
+      lastActivityAt: new Date(),
+      gameMode,
+      isMatchmade: true,
+    };
+
+    this.rooms.set(roomCode, room);
+    console.log(`[room] matchmade room ${roomCode} (${players.length} players)`);
+    return { roomCode, playerIds };
+  }
+
   // ─── Join ─────────────────────────────────────────────────────────────────
 
   joinRoom(
     roomCode: string,
     socketId: string,
     playerName: string,
+    accountId?: string,
   ): { success: true; playerId: string } | { success: false; error: string } {
     const room = this.rooms.get(roomCode);
     if (!room) return { success: false, error: 'Room not found' };
@@ -67,7 +128,7 @@ export class RoomManager {
     if (room.session) return { success: false, error: 'Game already in progress' };
 
     const playerId = uuidv4();
-    room.players.set(playerId, { id: playerId, name: playerName, socketId, ready: false });
+    room.players.set(playerId, { id: playerId, name: playerName, socketId, ready: false, accountId });
     room.lastActivityAt = new Date();
     this.socketToRoom.set(socketId, roomCode);
     console.log(`[room] ${playerName} (${playerId}) joined ${roomCode}`);
@@ -98,10 +159,6 @@ export class RoomManager {
 
   // ─── Mode & Teams ─────────────────────────────────────────────────────────
 
-  /**
-   * Set the game mode for a room. Only the host may change the mode.
-   * Returns the room on success, null if not found or not host.
-   */
   setGameMode(socketId: string, mode: GameMode): Room | null {
     const room = this.getRoomBySocket(socketId);
     if (!room) return null;
@@ -115,10 +172,6 @@ export class RoomManager {
     return room;
   }
 
-  /**
-   * Assign the player's team ('A' or 'B') for Team Play.
-   * Returns the room on success, null if socket not in a room.
-   */
   setPlayerTeam(socketId: string, teamId: string): Room | null {
     const room = this.getRoomBySocket(socketId);
     if (!room) return null;
@@ -144,7 +197,8 @@ export class RoomManager {
       name: p.name,
       teamId: p.teamId,
     }));
-    const session = new GameSession(players, room.gameMode, 'standardized-C');
+    const draftMode = room.isMatchmade ? 'hero-draft' : 'standardized-C';
+    const session = new GameSession(players, room.gameMode, draftMode);
     room.session = session;
     room.lastActivityAt = new Date();
     return session;
@@ -196,7 +250,6 @@ export class RoomManager {
 
     this.socketToRoom.delete(socketId);
 
-    // If game not started, remove player from room
     if (!room.session) {
       room.players.delete(removedPlayerId);
       if (room.players.size === 0) {
@@ -204,14 +257,12 @@ export class RoomManager {
         console.log(`[room] deleted empty room ${room.code}`);
       }
     }
-    // TODO: handle mid-game disconnects (pause timer, allow reconnect, forfeit after timeout)
 
     return { roomCode: room.code, playerId: removedPlayerId };
   }
 
   // ─── Cleanup ──────────────────────────────────────────────────────────────
 
-  /** Prune rooms idle for longer than the configured timeout */
   pruneIdleRooms(): void {
     const cutoff = Date.now() - config.roomIdleTimeoutMinutes * 60 * 1000;
     for (const [code, room] of this.rooms.entries()) {
@@ -228,7 +279,10 @@ export class RoomManager {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code: string;
     do {
-      code = Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+      code = Array.from(
+        { length: 4 },
+        () => chars[Math.floor(Math.random() * chars.length)],
+      ).join('');
     } while (this.rooms.has(code));
     return code;
   }

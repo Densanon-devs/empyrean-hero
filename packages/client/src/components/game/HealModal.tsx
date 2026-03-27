@@ -3,12 +3,13 @@ import Modal from '../ui/Modal';
 import HeroCardDisplay from '../cards/HeroCardDisplay';
 import CardComponent from '../cards/CardComponent';
 import { useGameContext } from '../../context/GameContext';
-import { useMyPlayer, useOpponents } from '../../hooks/useGameState';
+import { useMyPlayer } from '../../hooks/useGameState';
 import { getSocket } from '../../socket/client';
-import type { ArenaHero } from '@empyrean-hero/engine';
+import type { ArenaHero, AbilityCard } from '@empyrean-hero/engine';
+import type { CardPlay } from '@empyrean-hero/engine';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HealModal — select fatigued heroes to un-fatigue, then optionally play cards
+// HealModal — select your fatigued heroes to un-fatigue, then optionally play cards
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface HealModalProps {
@@ -20,24 +21,18 @@ type Step = 'heroes' | 'cards';
 export default function HealModal({ onClose }: HealModalProps) {
   const { playerId } = useGameContext();
   const me = useMyPlayer();
-  const opponents = useOpponents();
 
   const [step, setStep] = useState<Step>('heroes');
   const [selectedHeroIds, setSelectedHeroIds] = useState<string[]>([]);
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
+  // cardId → hero instanceId for passive ability cards that need a target
+  const [cardTargets, setCardTargets] = useState<Record<string, string>>({});
+  const [attachingCardId, setAttachingCardId] = useState<string | null>(null);
 
   if (!me || !playerId) return null;
 
-  // All fatigued heroes across every player's arena
-  const fatiguedHeroes: Array<{ hero: ArenaHero; playerName: string; isMe: boolean }> = [];
-  for (const hero of me.arena) {
-    if (hero.fatigued) fatiguedHeroes.push({ hero, playerName: me.name, isMe: true });
-  }
-  for (const opp of opponents) {
-    for (const hero of opp.arena) {
-      if (hero.fatigued) fatiguedHeroes.push({ hero, playerName: opp.name, isMe: false });
-    }
-  }
+  // Only YOUR fatigued heroes (Heal only un-fatigues your own heroes)
+  const myFatiguedHeroes = me.arena.filter((h) => h.fatigued);
 
   function toggleHero(id: string) {
     setSelectedHeroIds((prev) =>
@@ -47,19 +42,44 @@ export default function HealModal({ onClose }: HealModalProps) {
 
   function toggleCard(id: string) {
     setSelectedCardIds((prev) => {
-      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.includes(id)) {
+        setCardTargets((t) => { const c = { ...t }; delete c[id]; return c; });
+        return prev.filter((x) => x !== id);
+      }
       if (prev.length >= 3) return prev;
       return [...prev, id];
     });
   }
 
+  // Check if any selected passive ability cards still need a hero target
+  const selectedPassiveCards = selectedCardIds
+    .map((id) => me.hand.find((c) => c.id === id))
+    .filter((c): c is AbilityCard => c?.type === 'ability' && (c as AbilityCard).abilityType === 'P');
+  const untargetedPassive = selectedPassiveCards.filter((c) => !cardTargets[c.id]);
+
   function handleConfirm() {
+    // Build cardPlays with targets for passive ability cards
+    const cardPlays: CardPlay[] = selectedCardIds.map((id) => ({
+      cardId: id,
+      targetId: cardTargets[id],
+    }));
+
     getSocket().emit(
       'game:action',
-      { type: 'HEAL', playerId: playerId!, targetHeroInstanceIds: selectedHeroIds, cardIds: selectedCardIds },
+      {
+        type: 'HEAL',
+        playerId: playerId!,
+        targetHeroInstanceIds: selectedHeroIds,
+        cardPlays,
+      },
       () => {},
     );
     onClose();
+  }
+
+  function handleProceedToCards() {
+    if (selectedHeroIds.length === 0) return;
+    setStep('cards');
   }
 
   // ── Footer per step ──────────────────────────────────────────────────────
@@ -72,7 +92,7 @@ export default function HealModal({ onClose }: HealModalProps) {
       <button
         className="btn-primary flex-1 text-sm py-2.5"
         disabled={selectedHeroIds.length === 0}
-        onClick={() => setStep('cards')}
+        onClick={handleProceedToCards}
       >
         Next — Play Cards
         {selectedHeroIds.length > 0 && (
@@ -89,14 +109,23 @@ export default function HealModal({ onClose }: HealModalProps) {
       <button className="btn-secondary text-sm py-2.5 px-5" onClick={() => setStep('heroes')}>
         ← Back
       </button>
-      <button className="btn-primary flex-1 text-sm py-2.5" onClick={handleConfirm}>
-        Confirm Heal
-        {selectedCardIds.length > 0 && (
-          <span className="ml-1.5 opacity-80">
-            + {selectedCardIds.length} card{selectedCardIds.length !== 1 ? 's' : ''}
-          </span>
-        )}
-      </button>
+      {untargetedPassive.length > 0 ? (
+        <button
+          className="btn-primary flex-1 text-sm py-2.5 animate-pulse"
+          onClick={() => setAttachingCardId(untargetedPassive[0]!.id)}
+        >
+          Attach {untargetedPassive.length} Card{untargetedPassive.length !== 1 ? 's' : ''} →
+        </button>
+      ) : (
+        <button className="btn-primary flex-1 text-sm py-2.5" onClick={handleConfirm}>
+          Confirm Heal
+          {selectedCardIds.length > 0 && (
+            <span className="ml-1.5 opacity-80">
+              + {selectedCardIds.length} card{selectedCardIds.length !== 1 ? 's' : ''}
+            </span>
+          )}
+        </button>
+      )}
     </div>
   );
 
@@ -118,14 +147,14 @@ export default function HealModal({ onClose }: HealModalProps) {
       {step === 'heroes' && (
         <div className="space-y-4">
           <p className="text-sm text-white/60">
-            Choose 1 or more fatigued heroes to un-fatigue.
+            Choose 1 or more of your fatigued heroes to un-fatigue.
           </p>
 
-          {fatiguedHeroes.length === 0 ? (
-            <EmptySlate message="No fatigued heroes in any arena right now." />
+          {myFatiguedHeroes.length === 0 ? (
+            <EmptySlate message="None of your arena heroes are fatigued right now." />
           ) : (
             <div className="flex flex-wrap gap-4">
-              {fatiguedHeroes.map(({ hero, playerName, isMe }) => {
+              {myFatiguedHeroes.map((hero) => {
                 const selected = selectedHeroIds.includes(hero.instanceId);
                 return (
                   <div
@@ -137,25 +166,8 @@ export default function HealModal({ onClose }: HealModalProps) {
                         : 'hover:scale-105 hover:ring-2 hover:ring-white/30',
                     ].join(' ')}
                     onClick={() => toggleHero(hero.instanceId)}
-                    title={`${hero.heroCard.heroName} — ${playerName}`}
                   >
                     <HeroCardDisplay card={hero.heroCard} fatigued />
-
-                    {/* Owner badge */}
-                    <div className="absolute -top-2.5 left-0 right-0 flex justify-center pointer-events-none">
-                      <span
-                        className={[
-                          'rounded-full px-2 py-0.5 text-[9px] font-semibold shadow',
-                          isMe
-                            ? 'bg-empyrean-gold/90 text-empyrean-navyDark'
-                            : 'bg-white/20 text-white/80',
-                        ].join(' ')}
-                      >
-                        {isMe ? 'You' : playerName}
-                      </span>
-                    </div>
-
-                    {/* Check mark */}
                     {selected && (
                       <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-green-400 flex items-center justify-center text-black text-[11px] font-bold shadow pointer-events-none">
                         ✓
@@ -185,24 +197,64 @@ export default function HealModal({ onClose }: HealModalProps) {
                 const selected = selectedCardIds.includes(card.id);
                 const atMax = selectedCardIds.length >= 3;
                 const disabled = !selected && atMax;
+                const isPassive = card.type === 'ability' && (card as AbilityCard).abilityType === 'P';
+                const hasTarget = isPassive && !!cardTargets[card.id];
                 return (
-                  <div
-                    key={card.id}
-                    className={[
-                      'relative transition-all duration-150',
-                      selected
-                        ? 'scale-105 shadow-[0_0_12px_rgba(212,175,55,0.5)]'
-                        : disabled
-                          ? 'opacity-35 cursor-not-allowed'
-                          : 'hover:scale-105 cursor-pointer',
-                    ].join(' ')}
-                    onClick={() => !disabled && toggleCard(card.id)}
-                    title={disabled ? 'Max 3 cards' : card.name}
-                  >
-                    <CardComponent card={card} selected={selected} disabled={disabled} />
-                    {selected && (
-                      <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-empyrean-gold flex items-center justify-center text-empyrean-navyDark text-[11px] font-bold shadow pointer-events-none">
-                        ✓
+                  <div key={card.id} className="flex flex-col items-center gap-1">
+                    <div
+                      className={[
+                        'relative transition-all duration-150',
+                        selected
+                          ? 'scale-105 shadow-[0_0_12px_rgba(212,175,55,0.5)]'
+                          : disabled
+                            ? 'opacity-35 cursor-not-allowed'
+                            : 'hover:scale-105 cursor-pointer',
+                      ].join(' ')}
+                      onClick={() => !disabled && toggleCard(card.id)}
+                    >
+                      <CardComponent card={card} selected={selected} disabled={disabled} />
+                      {selected && (
+                        <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-empyrean-gold flex items-center justify-center text-empyrean-navyDark text-[11px] font-bold shadow pointer-events-none">
+                          ✓
+                        </div>
+                      )}
+                    </div>
+                    {/* Passive ability card: show hero target picker */}
+                    {selected && isPassive && (
+                      <button
+                        className={[
+                          'text-[10px] rounded-full px-2 py-0.5 border transition-colors',
+                          hasTarget
+                            ? 'border-green-400/60 text-green-300 bg-green-400/10'
+                            : 'border-orange-400/60 text-orange-300 bg-orange-400/10 animate-pulse',
+                        ].join(' ')}
+                        onClick={() => setAttachingCardId(attachingCardId === card.id ? null : card.id)}
+                      >
+                        {hasTarget
+                          ? `→ ${getHeroName(cardTargets[card.id]!, me.arena)}`
+                          : 'Choose hero'}
+                      </button>
+                    )}
+                    {/* Hero picker for this passive card */}
+                    {selected && isPassive && attachingCardId === card.id && (
+                      <div className="mt-1 flex flex-wrap gap-1 max-w-xs">
+                        {me.arena.map((hero) => (
+                          <button
+                            key={hero.instanceId}
+                            className={[
+                              'rounded-lg border px-2 py-1 text-[10px] transition-colors',
+                              cardTargets[card.id] === hero.instanceId
+                                ? 'border-green-400 text-green-300 bg-green-400/10'
+                                : 'border-white/20 text-white/50 hover:border-white/40',
+                            ].join(' ')}
+                            onClick={() => {
+                              setCardTargets((prev) => ({ ...prev, [card.id]: hero.instanceId }));
+                              setAttachingCardId(null);
+                            }}
+                          >
+                            {hero.heroCard.heroName}
+                          </button>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -221,6 +273,10 @@ export default function HealModal({ onClose }: HealModalProps) {
 }
 
 // ── Small helpers ──────────────────────────────────────────────────────────────
+
+function getHeroName(instanceId: string, heroes: ArenaHero[]): string {
+  return heroes.find((h) => h.instanceId === instanceId)?.heroCard.heroName ?? instanceId;
+}
 
 function StepDot({ n, label, active, done }: { n: number; label: string; active: boolean; done: boolean }) {
   return (

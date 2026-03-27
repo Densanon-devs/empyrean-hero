@@ -15,3 +15,6 @@ Thumbs.db
 # PWA
 sw.js
 workbox-*.js
+
+# Claude Code
+.claude/

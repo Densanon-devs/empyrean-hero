@@ -8,17 +8,20 @@ import type {
 // Socket.io client singleton
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SERVER_URL =
-  import.meta.env['VITE_SERVER_URL'] as string | undefined ?? 'http://localhost:3001';
+const SERVER_URL = import.meta.env.PROD
+  ? window.location.origin
+  : ((import.meta.env['VITE_SERVER_URL'] as string | undefined) ?? 'http://localhost:3001');
 
 /** Typed socket singleton — created lazily on first use */
 let _socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
 
 export function getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> {
   if (!_socket) {
+    const token = localStorage.getItem('auth_token') ?? undefined;
     _socket = io(SERVER_URL, {
       autoConnect: false,
       transports: ['websocket'],
+      auth: token ? { token } : {},
     });
   }
   return _socket;
@@ -26,6 +29,14 @@ export function getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> 
 
 export function connectSocket(): void {
   getSocket().connect();
+}
+
+/** Recreate socket with updated auth token (call after login/logout) */
+export function resetSocket(): void {
+  if (_socket) {
+    _socket.disconnect();
+    _socket = null;
+  }
 }
 
 export function disconnectSocket(): void {

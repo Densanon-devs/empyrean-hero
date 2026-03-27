@@ -4,7 +4,7 @@ import React, {
   useReducer,
   type ReactNode,
 } from 'react';
-import type { GameState, DraftState, GameMode } from '@empyrean-hero/engine';
+import type { GameState, DraftState, GameMode, GameEvent, QueueType } from '@empyrean-hero/engine';
 import type { AppSocket } from '../socket/client';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -18,6 +18,14 @@ export interface LobbyPlayerInfo {
   teamId?: string;
 }
 
+interface MatchmakingState {
+  status: 'idle' | 'queuing' | 'found';
+  queueType: QueueType | null;
+  queuePosition: number;
+  queueSize: number;
+  waitSeconds: number;
+}
+
 interface GameContextState {
   socket: AppSocket | null;
   playerId: string | null;
@@ -26,12 +34,16 @@ interface GameContextState {
   lobbyPlayers: LobbyPlayerInfo[];
   gameState: GameState | null;
   draftState: DraftState | null;
+  /** Recent game events (last 50) for the event feed / notifications */
+  gameEvents: GameEvent[];
   error: string | null;
   isConnected: boolean;
   /** Current game mode set in the lobby */
   roomMode: GameMode;
   /** Player ID of the room host */
   roomHostId: string | null;
+  /** Matchmaking state */
+  matchmaking: MatchmakingState;
 }
 
 type GameContextAction =
@@ -39,12 +51,26 @@ type GameContextAction =
   | { type: 'CONNECTED' }
   | { type: 'DISCONNECTED' }
   | { type: 'SET_IDENTITY'; playerId: string; playerName: string; roomCode: string }
+  | { type: 'SET_PLAYER_NAME'; playerName: string }
   | { type: 'SET_LOBBY_PLAYERS'; players: LobbyPlayerInfo[] }
   | { type: 'SET_GAME_STATE'; state: GameState }
   | { type: 'SET_DRAFT_STATE'; state: DraftState }
+  | { type: 'ADD_GAME_EVENT'; event: GameEvent }
   | { type: 'SET_ERROR'; error: string | null }
   | { type: 'SET_ROOM_CONFIG'; mode: GameMode; hostId: string }
+  | { type: 'MATCHMAKING_QUEUING'; queueType: QueueType }
+  | { type: 'MATCHMAKING_STATUS'; position: number; queueSize: number; waitSeconds: number }
+  | { type: 'MATCHMAKING_FOUND'; playerId: string; roomCode: string }
+  | { type: 'MATCHMAKING_IDLE' }
   | { type: 'RESET' };
+
+const initialMatchmaking: MatchmakingState = {
+  status: 'idle',
+  queueType: null,
+  queuePosition: 0,
+  queueSize: 0,
+  waitSeconds: 0,
+};
 
 const initialState: GameContextState = {
   socket: null,
@@ -54,10 +80,12 @@ const initialState: GameContextState = {
   lobbyPlayers: [],
   gameState: null,
   draftState: null,
+  gameEvents: [],
   error: null,
   isConnected: false,
   roomMode: 'free-for-all',
   roomHostId: null,
+  matchmaking: initialMatchmaking,
 };
 
 function reducer(state: GameContextState, action: GameContextAction): GameContextState {
@@ -76,10 +104,41 @@ function reducer(state: GameContextState, action: GameContextAction): GameContex
       return { ...state, gameState: action.state, error: null };
     case 'SET_DRAFT_STATE':
       return { ...state, draftState: action.state };
+    case 'ADD_GAME_EVENT':
+      return {
+        ...state,
+        gameEvents: [...state.gameEvents.slice(-49), action.event],
+      };
     case 'SET_ERROR':
       return { ...state, error: action.error };
     case 'SET_ROOM_CONFIG':
       return { ...state, roomMode: action.mode, roomHostId: action.hostId };
+    case 'SET_PLAYER_NAME':
+      return { ...state, playerName: action.playerName };
+    case 'MATCHMAKING_QUEUING':
+      return {
+        ...state,
+        matchmaking: { ...initialMatchmaking, status: 'queuing', queueType: action.queueType },
+      };
+    case 'MATCHMAKING_STATUS':
+      return {
+        ...state,
+        matchmaking: {
+          ...state.matchmaking,
+          queuePosition: action.position,
+          queueSize: action.queueSize,
+          waitSeconds: action.waitSeconds,
+        },
+      };
+    case 'MATCHMAKING_FOUND':
+      return {
+        ...state,
+        playerId: action.playerId,
+        roomCode: action.roomCode,
+        matchmaking: { ...state.matchmaking, status: 'found' },
+      };
+    case 'MATCHMAKING_IDLE':
+      return { ...state, matchmaking: initialMatchmaking };
     case 'RESET':
       return { ...initialState };
     default:

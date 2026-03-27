@@ -1,7 +1,11 @@
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { RankBadge } from '../components/ui/RankBadge';
+import { getRankTier } from '@empyrean-hero/engine';
 
 export default function Home() {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-8 px-4 text-center">
@@ -18,6 +22,19 @@ export default function Home() {
         </p>
       </div>
 
+      {/* User rank badge if logged in */}
+      {user?.stats && (
+        <div className="flex items-center gap-3 rounded-xl bg-white/5 border border-white/10 px-5 py-3 animate-fade-in">
+          <RankBadge tier={getRankTier(user.stats.rating)} size={36} />
+          <div className="text-left">
+            <p className="font-semibold text-white">{user.username}</p>
+            <p className="text-xs text-white/40">
+              {getRankTier(user.stats.rating)} · {user.stats.rating} rating
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex flex-col gap-3 w-full max-w-xs animate-slide-up">
         <button
@@ -28,20 +45,25 @@ export default function Home() {
         </button>
         <button
           className="btn-secondary text-center"
-          onClick={() => {
-            // TODO: local/offline play
-          }}
+          onClick={() => navigate('/leaderboard')}
         >
-          Local Play
+          Leaderboard
         </button>
-        <button
-          className="btn-secondary text-center text-empyrean-ash/60 border-white/20"
-          onClick={() => {
-            // TODO: tutorial
-          }}
-        >
-          How to Play
-        </button>
+        {user ? (
+          <button
+            className="btn-secondary text-center"
+            onClick={() => navigate('/profile')}
+          >
+            My Profile
+          </button>
+        ) : (
+          <button
+            className="btn-secondary text-center"
+            onClick={() => navigate('/login')}
+          >
+            Sign In / Register
+          </button>
+        )}
       </div>
 
       {/* Footer */}

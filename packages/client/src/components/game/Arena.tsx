@@ -1,6 +1,6 @@
 import { useGameContext } from '../../context/GameContext';
 import HeroCardDisplay from '../cards/HeroCardDisplay';
-import type { ArenaHero } from '@empyrean-hero/engine';
+import type { ArenaHero, AbilityCard } from '@empyrean-hero/engine';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Arena — the play area showing a player's SkyBase and deployed heroes
@@ -12,9 +12,11 @@ interface ArenaProps {
   onHeroClick?: (hero: ArenaHero) => void;
   /** Highlight these hero instance IDs as selected */
   selectedHeroIds?: string[];
+  /** Whether we're viewing our own arena (controls ability card name visibility) */
+  isOwn?: boolean;
 }
 
-export default function Arena({ playerId, onHeroClick, selectedHeroIds = [] }: ArenaProps) {
+export default function Arena({ playerId, onHeroClick, selectedHeroIds = [], isOwn = false }: ArenaProps) {
   const { gameState } = useGameContext();
   const player = gameState?.players[playerId];
 
@@ -57,10 +59,11 @@ export default function Arena({ playerId, onHeroClick, selectedHeroIds = [] }: A
 
               {/* Stat card indicators */}
               {arenaHero.appliedStatCards.length > 0 && (
-                <div className="absolute -top-1 -right-1 flex gap-0.5">
+                <div className="absolute -top-1 -right-1 flex gap-0.5 flex-wrap max-w-[60px] justify-end">
                   {arenaHero.appliedStatCards.map((sc, i) => (
                     <span
                       key={i}
+                      title={`${sc.name}: +${sc.value} ${sc.statType}`}
                       className={`rounded px-1 text-[9px] font-bold ${
                         sc.statType === 'ATT' ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'
                       }`}
@@ -71,9 +74,18 @@ export default function Arena({ playerId, onHeroClick, selectedHeroIds = [] }: A
                 </div>
               )}
 
-              {/* Temp bonus indicators */}
+              {/* Field ability cards */}
+              {arenaHero.fieldAbilityCards.length > 0 && (
+                <div className="absolute -bottom-1 left-0 right-0 flex flex-wrap justify-center gap-0.5 px-0.5">
+                  {arenaHero.fieldAbilityCards.map((ac, i) => (
+                    <AbilityBadge key={i} card={ac} isOwn={isOwn} />
+                  ))}
+                </div>
+              )}
+
+              {/* Temp bonus indicators (shown above field abilities) */}
               {(arenaHero.tempAttackBonus > 0 || arenaHero.tempDefenseBonus > 0) && (
-                <div className="absolute -bottom-1 left-0 right-0 flex justify-center gap-1">
+                <div className="absolute top-1 left-1 flex flex-col gap-0.5">
                   {arenaHero.tempAttackBonus > 0 && (
                     <span className="rounded px-1 text-[9px] font-bold bg-orange-500/80 text-white">
                       +{arenaHero.tempAttackBonus}⚔
@@ -98,5 +110,23 @@ export default function Arena({ playerId, onHeroClick, selectedHeroIds = [] }: A
         </p>
       )}
     </div>
+  );
+}
+
+// ── Ability badge shown on arena heroes ───────────────────────────────────────
+
+function AbilityBadge({ card, isOwn }: { card: AbilityCard; isOwn: boolean }) {
+  return (
+    <span
+      title={isOwn ? `${card.name}: ${card.description}` : 'Hidden ability'}
+      className={[
+        'rounded px-1 text-[8px] font-bold truncate max-w-[52px]',
+        isOwn
+          ? 'bg-purple-600/80 text-white'
+          : 'bg-purple-900/60 text-purple-300/80',
+      ].join(' ')}
+    >
+      {isOwn ? card.name : 'ABILITY'}
+    </span>
   );
 }
