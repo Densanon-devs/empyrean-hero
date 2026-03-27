@@ -2,6 +2,7 @@ services:
   - type: web
     name: empyrean-hero
     runtime: node
+    plan: free
     buildCommand: npm install -g pnpm && pnpm install --frozen-lockfile && pnpm run build
     startCommand: node packages/server/dist/index.js
     envVars:
