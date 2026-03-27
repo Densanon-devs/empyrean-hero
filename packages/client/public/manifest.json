@@ -1,0 +1,14 @@
+{
+  "name": "Empyrean Hero: The Card Game",
+  "short_name": "Empyrean Hero",
+  "description": "A tactical card game with real-time multiplayer",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d1829",
+  "theme_color": "#1B2A4A",
+  "icons": [
+    { "src": "/icons/pwa-192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/pwa-512x512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/pwa-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+*.env.local
+*.local
+.DS_Store
+Thumbs.db
+
+# pnpm
+.pnpm-store/
+
+# Vite
+*.tsbuildinfo
+
+# PWA
+sw.js
+workbox-*.js

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm --filter @empyrean-hero/engine tsc --noEmit)",
+      "Bash(pnpm --filter @empyrean-hero/engine typecheck)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(../../node_modules/.bin/tsc --noEmit)"
+    ]
+  }
+}

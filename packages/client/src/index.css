@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-navy: #1B2A4A;
+    --color-navy-dark: #0d1829;
+    --color-gold: #D4AF37;
+    --color-crimson: #8B1A1A;
+  }
+
+  html, body, #root {
+    @apply h-full;
+  }
+
+  body {
+    @apply bg-empyrean-navyDark text-white font-body antialiased;
+    background-image: radial-gradient(ellipse at top, #1B2A4A 0%, #0d1829 70%);
+    min-height: 100dvh;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+}
+
+@layer components {
+  /* Card base styles */
+  .card-base {
+    @apply relative rounded-xl border border-empyrean-gold/30 bg-empyrean-navy
+           shadow-card transition-all duration-200 select-none cursor-pointer;
+  }
+
+  .card-base:hover {
+    @apply shadow-card-hover border-empyrean-gold/70 -translate-y-1;
+  }
+
+  .card-base.fatigued {
+    @apply opacity-60 brightness-75 rotate-6;
+  }
+
+  /* Button variants */
+  .btn-primary {
+    @apply px-6 py-3 rounded-lg font-semibold text-empyrean-navyDark
+           bg-empyrean-gold hover:brightness-110 active:scale-95
+           transition-all duration-150 shadow-md;
+  }
+
+  .btn-secondary {
+    @apply px-6 py-3 rounded-lg font-semibold text-empyrean-gold
+           border border-empyrean-gold/50 hover:bg-empyrean-gold/10
+           active:scale-95 transition-all duration-150;
+  }
+
+  .btn-danger {
+    @apply px-6 py-3 rounded-lg font-semibold text-white
+           bg-empyrean-crimson hover:brightness-110 active:scale-95
+           transition-all duration-150;
+  }
+
+  /* Panel / surface */
+  .panel {
+    @apply rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-4;
+  }
+
+  /* HERO action button */
+  .hero-action-btn {
+    @apply flex flex-col items-center justify-center gap-1
+           w-20 h-20 rounded-xl border-2 font-display font-bold text-lg
+           transition-all duration-150 active:scale-95;
+  }
+
+  .hero-action-btn.heal    { @apply border-green-400/60 text-green-300 hover:bg-green-400/10; }
+  .hero-action-btn.enhance { @apply border-blue-400/60  text-blue-300  hover:bg-blue-400/10;  }
+  .hero-action-btn.recruit { @apply border-purple-400/60 text-purple-300 hover:bg-purple-400/10; }
+  .hero-action-btn.overcome{ @apply border-red-400/60   text-red-300   hover:bg-red-400/10;   }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { @apply rounded-full bg-white/20; }
