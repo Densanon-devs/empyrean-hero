@@ -2,10 +2,8 @@
 // REST API helper — typed fetch wrapper with JWT auth
 // ─────────────────────────────────────────────────────────────────────────────
 
-// In production the client is served from the server — use relative URLs
-const SERVER_URL = import.meta.env.PROD
-  ? ''
-  : ((import.meta.env['VITE_SERVER_URL'] as string | undefined) ?? 'http://localhost:3001');
+const SERVER_URL =
+  (import.meta.env['VITE_SERVER_URL'] as string | undefined) ?? 'http://localhost:3001';
 
 export async function apiFetch<T = unknown>(
   path: string,
