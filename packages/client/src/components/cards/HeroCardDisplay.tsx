@@ -10,34 +10,57 @@ const ABILITY_TYPE_STYLES: Record<string, string> = {
   H: 'bg-empyrean-gold/20 text-empyrean-gold border-empyrean-gold/40',
 };
 
+const ABILITY_TYPE_LABELS: Record<string, string> = {
+  A: 'Active',
+  P: 'Passive',
+  H: 'Heroic Feat',
+};
+
 interface HeroCardDisplayProps {
   card: HeroCard;
   fatigued?: boolean;
+  /**
+   * 'compact' (default): fixed w-32 h-48, no description — used in gameplay arena.
+   * 'draft': full-width, shows ability description — used in draft picker.
+   */
+  variant?: 'compact' | 'draft';
   className?: string;
   onClick?: () => void;
 }
 
-export default function HeroCardDisplay({ card, fatigued, className, onClick }: HeroCardDisplayProps) {
+export default function HeroCardDisplay({
+  card,
+  fatigued,
+  variant = 'compact',
+  className,
+  onClick,
+}: HeroCardDisplayProps) {
   const { ability } = card;
   const abilityStyle = ABILITY_TYPE_STYLES[ability.abilityType] ?? '';
+  const isDraft = variant === 'draft';
 
   return (
     <div
       className={[
-        'flex flex-col w-32 h-48 rounded-xl overflow-hidden text-xs select-none',
+        'flex flex-col rounded-xl overflow-hidden text-xs select-none',
+        isDraft ? 'w-full' : 'w-32 h-48',
         fatigued ? 'fatigued' : '',
         className ?? '',
       ].join(' ')}
       onClick={onClick}
     >
       {/* Illustration area */}
-      <div className="relative flex-1 bg-empyrean-navy/80 flex items-center justify-center overflow-hidden">
+      <div
+        className={[
+          'relative bg-empyrean-navy/80 flex items-center justify-center overflow-hidden',
+          isDraft ? 'h-28' : 'flex-1',
+        ].join(' ')}
+      >
         <img
           src={`/assets/${card.illustrationRef}`}
           alt={card.heroName}
           className="w-full h-full object-cover"
           onError={(e) => {
-            // Fallback placeholder when image not yet available
             (e.target as HTMLImageElement).style.display = 'none';
           }}
         />
@@ -64,11 +87,26 @@ export default function HeroCardDisplay({ card, fatigued, className, onClick }: 
         </div>
       </div>
 
-      {/* Ability chip */}
-      <div className={`flex items-center gap-1 px-2 py-1 border-t ${abilityStyle}`}>
-        <span className="font-bold">{ability.abilityType}</span>
-        <span className="truncate text-[10px]">{ability.name}</span>
-      </div>
+      {/* Ability section */}
+      {isDraft ? (
+        <div className={`border-t px-2 py-2 ${abilityStyle}`}>
+          <div className="flex items-center gap-1 mb-1">
+            <span className="font-bold text-[10px] rounded px-1 py-0.5 bg-black/20 shrink-0">
+              ({ability.abilityType})
+            </span>
+            <span className="font-semibold text-[11px] truncate">{ability.name}</span>
+            <span className="ml-auto text-[10px] opacity-60 shrink-0 pl-1">
+              {ABILITY_TYPE_LABELS[ability.abilityType]}
+            </span>
+          </div>
+          <p className="text-[10px] leading-snug opacity-90">{ability.description}</p>
+        </div>
+      ) : (
+        <div className={`flex items-center gap-1 px-2 py-1 border-t ${abilityStyle}`}>
+          <span className="font-bold">{ability.abilityType}</span>
+          <span className="truncate text-[10px]">{ability.name}</span>
+        </div>
+      )}
     </div>
   );
 }

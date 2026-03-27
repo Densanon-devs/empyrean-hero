@@ -1,12 +1,28 @@
 services:
   - type: web
-    name: empyrean-hero
+    name: empyrean-hero-api
     runtime: node
     plan: free
-    buildCommand: npm install -g pnpm && pnpm install --frozen-lockfile && pnpm run build
+    buildCommand: pnpm install && pnpm --filter @empyrean-hero/engine build && pnpm --filter @empyrean-hero/server build
     startCommand: node packages/server/dist/index.js
     envVars:
       - key: NODE_ENV
         value: production
       - key: JWT_SECRET
         generateValue: true
+      - key: CLIENT_ORIGIN
+        value: https://empyrean-hero-client.onrender.com
+
+  - type: web
+    name: empyrean-hero-client
+    runtime: static
+    plan: free
+    buildCommand: pnpm install && pnpm --filter @empyrean-hero/engine build && pnpm --filter @empyrean-hero/client build
+    staticPublishPath: packages/client/dist
+    envVars:
+      - key: VITE_SERVER_URL
+        value: https://empyrean-hero-api.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

@@ -30,8 +30,7 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEve
   httpServer,
   {
     cors: {
-      // In production the client is served from the same origin — block cross-origin
-      origin: config.nodeEnv === 'production' ? false : config.clientOrigin,
+      origin: config.clientOrigin,
       methods: ['GET', 'POST'],
     },
   },
