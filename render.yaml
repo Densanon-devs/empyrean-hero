@@ -12,8 +12,9 @@ services:
         generateValue: true
       - key: CLIENT_ORIGIN
         value: https://empyrean-hero-client.onrender.com
-  - type: static_site
-    name: empyrean-hero-client
+
+staticSites:
+  - name: empyrean-hero-client
     buildCommand: pnpm install && pnpm --filter @empyrean-hero/engine build && pnpm --filter @empyrean-hero/client build
     staticPublishPath: packages/client/dist
     envVars:
