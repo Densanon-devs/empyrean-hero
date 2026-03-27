@@ -13,10 +13,8 @@ services:
       - key: CLIENT_ORIGIN
         value: https://empyrean-hero-client.onrender.com
 
-  - type: web
+  - type: static_site
     name: empyrean-hero-client
-    runtime: static
-    plan: free
     buildCommand: pnpm install && pnpm --filter @empyrean-hero/engine build && pnpm --filter @empyrean-hero/client build
     staticPublishPath: packages/client/dist
     envVars:
